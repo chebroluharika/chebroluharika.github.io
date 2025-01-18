@@ -1,0 +1,194 @@
+### **Title: How to Automate File Operations with Godog and Go for Feature Testing**
+
+In this blog post, we'll walk through a practical example of automating file operations such as file creation and deletion using **Godog** in Go. We’ll also explain the prerequisites, the steps of execution, and why each part of the code is necessary for testing file operations.
+
+### **Introduction**
+This post explains how to write automated tests using the **Godog** testing framework (a Behavior-Driven Development tool for Go) to simulate and test file operations such as creating and deleting files.
+
+### **Prerequisites**
+
+Before diving into the code, here are the prerequisites:
+1. **Go Installed:** You need to have Go (Golang) installed on your system. You can download it from the official Go website: [https://golang.org/dl/](https://golang.org/dl/).
+2. **Godog Installed:** Godog is the Go implementation of Cucumber (a tool for Behavior-Driven Development). To install it, run the following command:
+   ```bash
+   go get github.com/cucumber/godog/cmd/godog
+   ```
+
+### **Project Structure**
+
+Here’s a quick look at the project structure:
+```
+├── features
+│   └── delete_file.feature
+├── go.mod
+├── go.sum
+├── file_operations.go
+└── file_operations_test.go
+```
+
+- `features/delete_file.feature`: This is the **feature file** written in Gherkin syntax that describes the behavior of the feature being tested.
+- `file_operations.go`: This file contains the Go code that implements the steps defined in the feature file.
+- `file_operations_test.go`: The test file that executes the feature file and runs the tests.
+
+### **What’s in the Feature File?**
+
+The **feature file** (written in Gherkin syntax) describes the steps of the behavior we're testing. Here’s a breakdown:
+
+#### **Feature: Delete a text file in a directory**
+
+- **Scenario: Delete the text file "main.tf" from the directory "modules"**
+
+   In this scenario, we will:
+   - Create a file (`main.tf`) inside a directory (`modules`).
+   - Delete the file.
+   - Verify that the file no longer exists.
+
+#### **Step Definitions in the Feature File**
+
+1. **Given Files: Create a text file with the name "main.tf" in the directory "modules" with read/write permissions**
+
+    - This step initializes the test by creating a text file in a specified directory.
+
+2. **When Files: Delete the text file with the name "main.tf" in the directory "modules"**
+
+    - This step deletes the file `main.tf` from the `modules` directory.
+
+3. **Then Files: Verify the text file "main.tf" does not exist in the directory "modules"**
+
+    - This step checks that the file `main.tf` has been successfully deleted.
+
+### **Understanding the Go Code: Step-by-Step**
+
+Let’s dive into the Go code and understand how each part works.
+
+#### **1. Helper Functions: Creating and Deleting Files**
+
+We start by writing helper functions that abstract the logic for creating and deleting files.
+
+- **`createFile()`**
+  
+  This function creates a file with the given content in the specified directory.
+  - It uses `os.MkdirAll()` to create any necessary parent directories.
+  - It then uses `os.WriteFile()` to write content to the file.
+
+- **`deleteFile()`**
+  
+  This function removes the specified file using `os.Remove()`.
+
+```go
+func createFile(filePath, content string) error {
+	dir := filepath.Dir(filePath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+	return os.WriteFile(filePath, []byte(content), 0644)
+}
+
+func deleteFile(filePath string) error {
+	return os.Remove(filePath)
+}
+```
+
+#### **2. Step Definitions: Mapping Feature Steps to Code**
+
+- **`createFileStep()`**
+
+  This function is responsible for creating a file as described in the feature file. It takes the file name, directory, and content from the feature file and passes it to the `createFile()` function.
+
+```go
+func createFileStep(fileName, directory string, content *godog.DocString) error {
+	filePath := filepath.Join(directory, fileName)
+	return createFile(filePath, content.Content)
+}
+```
+
+- **`deleteFileStep()`**
+
+  This function deletes the file by calling `deleteFile()` with the appropriate path.
+
+```go
+func deleteFileStep(fileName, directory string) error {
+	filePath := filepath.Join(directory, fileName)
+	return deleteFile(filePath)
+}
+```
+
+- **`verifyFileDeletedStep()`**
+
+  This function verifies if the file exists. If the file does not exist, it returns `nil`, signaling the test passed. If the file still exists, it returns an error to fail the test.
+
+```go
+func verifyFileDeletedStep(fileName, directory string) error {
+	filePath := filepath.Join(directory, fileName)
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		return nil // File does not exist as expected
+	}
+	return assert.AnError // File still exists, fail the step
+}
+```
+
+#### **3. The Test Suite: Running the Scenario**
+
+The `TestFeatures` function is the test entry point that initializes and runs the feature tests.
+
+```go
+func TestFeatures(t *testing.T) {
+	suite := godog.TestSuite{
+		ScenarioInitializer: InitializeScenario,
+		Options: &godog.Options{
+			Format:   "pretty",
+			Paths:    []string{"features"},
+			TestingT: t,
+		},
+	}
+	if suite.Run() != 0 {
+		t.Fatal("non-zero status returned, failed to run feature tests")
+	}
+}
+```
+
+- It initializes the scenario by mapping the steps in the feature file to the corresponding Go functions.
+- It then runs the test suite using the `godog` package.
+
+#### **4. Initializing the Scenario**
+
+In the `InitializeScenario` function, the steps defined in the feature file are mapped to the respective Go functions.
+
+```go
+func InitializeScenario(ctx *godog.ScenarioContext) {
+	ctx.Step(`^Files: Create a text file with the name "([^"]*)" in the directory "([^"]*)" with read/write permissions$`, createFileStep)
+	ctx.Step(`^Files: Delete the text file with the name "([^"]*)" in the directory "([^"]*)"$`, deleteFileStep)
+	ctx.Step(`^Files: Verify the text file "([^"]*)" does not exist in the directory "([^"]*)"$`, verifyFileDeletedStep)
+}
+```
+
+### **How to Execute the Test**
+
+To run the test, follow these steps:
+
+1. **Write Your Feature File:**
+   - Create a `.feature` file (e.g., `delete_file.feature`) with your Gherkin scenarios.
+   
+2. **Run the Tests:**
+   - Run the Go tests with `go test`:
+     ```bash
+     go test -v file_operations_test.go
+     ```
+
+   - This will run the test suite, which processes the steps defined in the `.feature` file and validates the file operations.
+
+### **When We Execute, What Happens?**
+
+When we execute the tests, Godog will:
+1. Parse the feature file.
+2. For each step, it will look for a corresponding Go function (defined in `file_operations.go`).
+3. It will execute those functions in order:
+   - **Create the file** `main.tf` in the `modules` directory.
+   - **Delete the file**.
+   - **Verify that the file is deleted** by checking that it does not exist.
+
+The results will be printed to the terminal, indicating whether each step passed or failed.
+
+### **Conclusion**
+
+In this blog, we’ve learned how to write a feature file and implement step definitions in Go to automate with **Godog**. This allows us to write automated behavior-driven tests for file creation, deletion, and verification in a structured, readable format.
